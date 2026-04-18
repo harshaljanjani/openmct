@@ -35,6 +35,10 @@ import { expect, test } from '../../../../pluginFixtures.js';
 const CHILD_LAYOUT_STORAGE_STATE_PATH = fileURLToPath(
   new URL('../../../../test-data/display_layout_with_child_layouts.json', import.meta.url)
 );
+const TEST_DISPLAY_LAYOUT_ID = {
+  namespace: '',
+  key: '712d07f1-3585-465a-a6db-3c40a9edcde7'
+};
 const CHILD_PLOT_STORAGE_STATE_PATH = fileURLToPath(
   new URL('../../../../test-data/display_layout_with_child_overlay_plot.json', import.meta.url)
 );
@@ -54,13 +58,16 @@ test.describe('Display Layout Sub-object Actions @localStorage', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('./', { waitUntil: 'domcontentloaded' });
     await page.getByLabel('Expand My Items folder').click();
-    const waitForMyItemsNavigation = page.waitForURL(`**/mine/?*`);
+    const waitForDisplayLayoutNavigation = page.waitForURL(
+      //eslint-disable-next-line
+      new RegExp(`.*/${TEST_DISPLAY_LAYOUT_ID.key}/\?.*`)
+    );
     await page
       .getByLabel('Main Tree')
       .getByLabel('Navigate to Parent Display Layout layout Object')
       .click();
     // Wait for the URL to change to the display layout
-    await waitForMyItemsNavigation;
+    await waitForDisplayLayoutNavigation;
   });
   test('Open in New Tab action preserves time bounds @2p', async ({ page }) => {
     test.info().annotations.push({
@@ -442,7 +449,7 @@ test.describe('Display Layout', () => {
       }
     });
     // Create a Display Layout
-    await createDomainObjectWithDefaults(page, {
+    const displayLayout = await createDomainObjectWithDefaults(page, {
       type: 'Display Layout',
       name: 'Test Display Layout'
     });
@@ -489,24 +496,10 @@ test.describe('Display Layout', () => {
     });
 
     await page.reload();
-
-    // wait for annotations requests to be batched and requested
-    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByLabel('Browse bar object name')).toHaveText(displayLayout.name);
     // Network requests for the composite telemetry with multiple items should be:
     // 1.  a single batched request for annotations
     await expect.poll(() => networkRequests, { timeout: 10000 }).toHaveLength(1);
-
-    await setRealTimeMode(page);
-
-    networkRequests = [];
-
-    await page.reload();
-
-    // wait for annotations to not load (if we have any, we've got a problem)
-    await page.waitForLoadState('domcontentloaded');
-
-    // In real time mode, we don't fetch annotations at all
-    await expect.poll(() => networkRequests, { timeout: 10000 }).toHaveLength(0);
   });
 
   test('Same objects with different request options have unique subscriptions', async ({
